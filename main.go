@@ -2,40 +2,37 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "index.html")
-	})
-
-	eventChan := make(chan string) // Channel to send events to clients
-
 	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		ctx := r.Context()
+
 		for {
-			eventData := <-eventChan
-			fmt.Fprintf(w, "data: %s\n\n", eventData)
-			w.(http.Flusher).Flush()
+			select {
+			case <-ctx.Done():
+				fmt.Println("Client disconnected")
+				return
+
+			default:
+				num := rand.Intn(1000)
+				fmt.Println("Number sent by server:", num)
+
+				fmt.Fprintf(w, "%d\n", num)
+				w.(http.Flusher).Flush()
+				time.Sleep(1 * time.Second)
+			}
 		}
 	})
 
-	http.HandleFunc("/send-event", func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(10 * time.Second)
-		eventData := fmt.Sprintf("Button clicked at %s", time.Now().Format("2006-01-02 15:04:05"))
-		eventChan <- eventData
-		w.WriteHeader(http.StatusOK)
-	})
-
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		fmt.Println("Failed to start the server:", err)
-		return
-	}
+	fmt.Println("Server running on :8080 streaming numbers")
+	http.ListenAndServe(":8080", nil)
 }
