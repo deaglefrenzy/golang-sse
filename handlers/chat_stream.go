@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/deaglefrenzy/golang-sse/models"
 	"github.com/gin-gonic/gin"
@@ -40,18 +41,42 @@ func StreamChats(c *gin.Context, col *mongo.Collection, room string) {
 	}
 	defer changeStream.Close(ctx)
 
-	// SSE loop
-	for changeStream.Next(ctx) {
-		var event models.ChangeEvent
-		if err := changeStream.Decode(&event); err != nil {
-			continue
-		}
+	// initial heartbeat
+	fmt.Fprintln(c.Writer, ": connected")
+	c.Writer.Flush()
 
-		jsonBytes, err := json.Marshal(event.FullDocument)
-		if err != nil {
-			continue
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	// SSE loop
+	for {
+		select {
+
+		case <-ctx.Done():
+			// client disconnected
+			return
+
+		case <-ticker.C:
+			// heartbeat
+			fmt.Fprintln(c.Writer, ": ping")
+			c.Writer.Flush()
+
+		default:
+			// Handle MongoDB events
+			if changeStream.Next(ctx) {
+				var event models.ChangeEvent
+				if err := changeStream.Decode(&event); err != nil {
+					continue
+				}
+
+				jsonBytes, err := json.Marshal(event.FullDocument)
+				if err != nil {
+					continue
+				}
+
+				fmt.Fprintf(c.Writer, "data: %s\n\n", jsonBytes)
+				c.Writer.Flush()
+			}
 		}
-		fmt.Fprintf(c.Writer, "data: %s\n\n", jsonBytes)
-		c.Writer.Flush()
 	}
 }

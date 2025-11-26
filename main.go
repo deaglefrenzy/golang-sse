@@ -26,10 +26,14 @@ func main() {
 		handlers.StreamChats(c, mongoChats, room)
 	})
 
-	// POST /chats
 	r.POST("/chats", func(c *gin.Context) {
 		room := c.Query("room")
 		handlers.InsertMessage(c, mongoChats, room)
+	})
+
+	r.GET("/chats/latest", func(c *gin.Context) {
+		room := c.Query("room")
+		handlers.GetLatestChats(c, mongoChats, room)
 	})
 
 	r.Run(":8080")
