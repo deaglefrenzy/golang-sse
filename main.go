@@ -1,38 +1,36 @@
 package main
 
 import (
-	"fmt"
-	"math/rand"
-	"net/http"
-	"time"
+	"log"
+
+	"github.com/deaglefrenzy/golang-sse/db"
+	"github.com/deaglefrenzy/golang-sse/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+	mongoClient, ctx, cancel, err := db.ConnectMongo()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cancel()
+	defer mongoClient.Disconnect(ctx)
 
-		ctx := r.Context()
+	mdb := mongoClient.Database("chatroom")
+	mongoChats := mdb.Collection("chats")
 
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("Client disconnected")
-				return
+	r := gin.Default()
 
-			default:
-				num := rand.Intn(1000)
-				fmt.Println("Number sent by server:", num)
-
-				fmt.Fprintf(w, "%d\n", num)
-				w.(http.Flusher).Flush()
-				time.Sleep(1 * time.Second)
-			}
-		}
+	r.GET("/chats/stream", func(c *gin.Context) {
+		room := c.Query("room")
+		handlers.StreamChats(c, mongoChats, room)
 	})
 
-	fmt.Println("Server running on :8080 streaming numbers")
-	http.ListenAndServe(":8080", nil)
+	// POST /chats
+	r.POST("/chats", func(c *gin.Context) {
+		room := c.Query("room")
+		handlers.InsertMessage(c, mongoChats, room)
+	})
+
+	r.Run(":8080")
 }

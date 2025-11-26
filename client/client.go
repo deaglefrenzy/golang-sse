@@ -2,14 +2,17 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
+
+	"github.com/deaglefrenzy/golang-sse/models"
 )
 
 func main() {
-	resp, err := http.Get("http://localhost:8080/events")
+	room := "lobby"
+	resp, err := http.Get("http://localhost:8080/chats/stream?room=" + room)
 	if err != nil {
 		panic(err)
 	}
@@ -17,45 +20,29 @@ func main() {
 
 	reader := bufio.NewReader(resp.Body)
 
-	fmt.Println("Listening for streamed numbers...")
+	fmt.Printf("Connected to room: %s\n", room)
 
 	for {
-		// read the line until the \n limiter
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Connection closed:", err)
 			return
 		}
 
-		// trim the line
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+		if after, ok := strings.CutPrefix(line, "data:"); ok {
+			raw := strings.TrimSpace(after)
 
-		// convert to int so can be detected as prime or not
-		num, err := strconv.Atoi(line)
-		if err != nil {
-			continue
-		}
+			var msg models.Chat
+			if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+				fmt.Println("Invalid JSON:", raw)
+				continue
+			}
 
-		fmt.Println("Received:", num)
-
-		if isPrime(num) {
-			fmt.Println("Connection cut because a prime number was detected")
-			return
+			fmt.Printf("[%s] %s : %s\n",
+				msg.CreatedAt.Format("2006-01-02 15:04:05"),
+				msg.User,
+				msg.Message,
+			)
 		}
 	}
-}
-
-func isPrime(n int) bool {
-	if n < 2 {
-		return false
-	}
-	for i := 2; i*i <= n; i++ {
-		if n%i == 0 {
-			return false
-		}
-	}
-	return true
 }
