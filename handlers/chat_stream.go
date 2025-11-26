@@ -62,21 +62,25 @@ func StreamChats(c *gin.Context, col *mongo.Collection, room string) {
 			c.Writer.Flush()
 
 		default:
-			// Handle MongoDB events
-			if changeStream.Next(ctx) {
-				var event models.ChangeEvent
-				if err := changeStream.Decode(&event); err != nil {
-					continue
-				}
-
-				jsonBytes, err := json.Marshal(event.FullDocument)
-				if err != nil {
-					continue
-				}
-
-				fmt.Fprintf(c.Writer, "data: %s\n\n", jsonBytes)
-				c.Writer.Flush()
+			// TryNext is a non-blocking change stream check
+			hasEvent := changeStream.TryNext(ctx)
+			if !hasEvent {
+				time.Sleep(50 * time.Millisecond) // small cooldown
+				continue
 			}
+
+			var event models.ChangeEvent
+			if err := changeStream.Decode(&event); err != nil {
+				continue
+			}
+
+			jsonBytes, err := json.Marshal(event.FullDocument)
+			if err != nil {
+				continue
+			}
+
+			fmt.Fprintf(c.Writer, "data: %s\n\n", jsonBytes)
+			c.Writer.Flush()
 		}
 	}
 }
