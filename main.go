@@ -19,22 +19,13 @@ func main() {
 	mdb := mongoClient.Database("chatroom")
 	mongoChats := mdb.Collection("chats")
 
+	handlers.StartMongoWatcher(mongoChats)
+
 	r := gin.Default()
 
-	r.GET("/chats/stream", func(c *gin.Context) {
-		room := c.Query("room")
-		handlers.StreamChats(c, mongoChats, room)
-	})
-
-	r.POST("/chats", func(c *gin.Context) {
-		room := c.Query("room")
-		handlers.InsertMessage(c, mongoChats, room)
-	})
-
-	r.GET("/chats/latest", func(c *gin.Context) {
-		room := c.Query("room")
-		handlers.GetLatestChats(c, mongoChats, room)
-	})
+	r.GET("/chats/stream", handlers.SSEHandler)
+	r.POST("/chats", func(c *gin.Context) { handlers.InsertMessage(c, mongoChats) })
+	r.GET("/chats/latest", func(c *gin.Context) { handlers.GetLatestChats(c, mongoChats) })
 
 	r.Run(":8080")
 }

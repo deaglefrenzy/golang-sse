@@ -12,7 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func InsertMessage(c *gin.Context, col *mongo.Collection, room string) {
+func InsertMessage(c *gin.Context, col *mongo.Collection) {
+	room := c.Query("room")
 	var message models.Chat
 
 	if err := c.BindJSON(&message); err != nil {
@@ -37,7 +38,8 @@ func InsertMessage(c *gin.Context, col *mongo.Collection, room string) {
 	})
 }
 
-func GetLatestChats(c *gin.Context, col *mongo.Collection, room string) {
+func GetLatestChats(c *gin.Context, col *mongo.Collection) {
+	room := c.Query("room")
 	ctx := c.Request.Context()
 
 	limit := 5

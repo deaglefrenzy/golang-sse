@@ -13,6 +13,8 @@ import (
 	"github.com/deaglefrenzy/golang-sse/models"
 )
 
+var history []models.Chat
+
 func main() {
 	readerInput := bufio.NewReader(os.Stdin)
 
@@ -35,17 +37,9 @@ func main() {
 	}
 	defer historyResp.Body.Close()
 
-	var history []models.Chat
 	json.NewDecoder(historyResp.Body).Decode(&history)
 
-	for _, msg := range history {
-		fmt.Printf("[%s] %s : %s\n",
-			msg.CreatedAt.Format("2006-01-02 15:04:05"),
-			msg.User,
-			msg.Message,
-		)
-	}
-	fmt.Println("---------------------------")
+	render(room, user)
 
 	// connect to sse stream
 	sseURL := "http://localhost:8080/chats/stream?room=" + room
@@ -57,7 +51,7 @@ func main() {
 	defer streamResp.Body.Close()
 
 	reader := bufio.NewReader(streamResp.Body)
-	fmt.Printf("Connected to SSE stream (room: %s)\n", room)
+	//fmt.Printf("Connected to SSE stream (room: %s)\n", room)
 
 	// Goroutine: listen for SSE events
 	go func() {
@@ -66,6 +60,17 @@ func main() {
 			if err != nil {
 				fmt.Println("SSE connection closed:", err)
 				return
+			}
+
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if strings.HasPrefix(line, ":") {
+				continue
+			}
+			if strings.Contains(line, "ping") {
+				continue
 			}
 
 			if after, ok := strings.CutPrefix(line, "data:"); ok {
@@ -82,6 +87,8 @@ func main() {
 					msg.User,
 					msg.Message,
 				)
+				history = append(history, msg)
+				render(room, user)
 			}
 		}
 	}()
@@ -131,4 +138,27 @@ func main() {
 		}
 		resp.Body.Close()
 	}
+}
+
+func render(room string, user string) {
+	fmt.Print("\033[2J\033[H")
+
+	fmt.Printf("=== ROOM: %s ===\n\n", room)
+
+	// show last 10 messages
+	start := 0
+	if len(history) > 10 {
+		start = len(history) - 10
+	}
+
+	for _, msg := range history[start:] {
+		fmt.Printf("[%s] %-10s : %s\n",
+			msg.CreatedAt.Format("15:04:05"),
+			msg.User,
+			msg.Message,
+		)
+	}
+
+	fmt.Println("\n-------------------")
+	fmt.Printf("You (%s): ", user)
 }
